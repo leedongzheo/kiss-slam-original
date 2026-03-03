@@ -112,7 +112,8 @@ class RegistrationVisualizer(StubVisualizer):
 
         # GUI / control flags
         self.block_vis = True
-        self.play_crun = False
+        # self.play_crun = False
+        self.play_crun = True
         self.reset_bounding_box = True
         self.follow_cam = True  # <-- follow camera enabled by default
 
