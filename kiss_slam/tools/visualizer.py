@@ -28,6 +28,7 @@ except Exception:
 
 SHOW_ODOM = False
 FLIP_Z = True
+
 def _flip_z_points(pts: np.ndarray) -> np.ndarray:
     if pts.size == 0:
         return pts
@@ -40,6 +41,7 @@ def _flip_z_pose(T: np.ndarray) -> np.ndarray:
     out = T.copy()
     out[2, 3] *= -1.0
     return out
+
 # -------- Colors / sizes --------
 YELLOW = np.array([1, 0.706, 0])
 GREY   = np.array([0.5, 0.5, 0.5])
@@ -55,40 +57,32 @@ SPHERE_SIZE_ODOMETRY = 0.2
 TRAJ_Z_OFFSET = -11.0   # <-- nâng đường trajectory lên 0.4m (tùy cảnh có thể 0.2–1.0)
 THEMES = {
     "TH1": {
-        # "trajectory": np.array([0.0, 0.0, 0.75]),   # Dark Blue
-        "trajectory": np.array([0.4, 0.5, 0.9]),   #  Light Blue 
-        "keyframe":  np.array([1.0, 0.8, 0.0]),    #  Yellow 
-        # "odom":      np.array([0.4, 0.9, 0.5]),    # Green
+        "trajectory": np.array([0.4, 0.5, 0.9]),   # Light Blue 
+        "keyframe":  np.array([1.0, 0.8, 0.0]),    # Yellow 
         "odom":      np.array([0.4, 0.5, 0.9]),    # Dark Blue  
         "localmap":  np.array([0.7, 0.7, 0.7]),    # Grey
         "closure":   np.array([1.0, 0.0, 0.0])     # Red
     },
     "TH2": {
-        # "trajectory": np.array([1.0, 0.55, 0.0]),  # Orange
         "trajectory": np.array([1.0, 0.6, 0.0]),   # Light Orange 
         "keyframe":   np.array([1.0, 0.8, 0.0]),   # Yellow
-        # "odom":       np.array([0.4, 0.9, 0.5]),   # Green
         "odom":       np.array([1.0, 0.6, 0.0]),   # Orange   
         "localmap":   np.array([0.7, 0.7, 0.7]),   # Grey
         "closure":    np.array([1.0, 0.0, 0.0])    # Red
     }
 }
 
-
 def transform_points(pcd, T):
     R = T[:3, :3]
     t = T[:3, -1]
     return pcd @ R.T + t
 
-
 class StubVisualizer(ABC):
     def __init__(self):
         pass
 
-
     def update(self, slam):
         pass
-
 
 class RegistrationVisualizer(StubVisualizer):
     """
@@ -112,7 +106,6 @@ class RegistrationVisualizer(StubVisualizer):
 
         # GUI / control flags
         self.block_vis = True
-        # self.play_crun = False
         self.play_crun = True
         self.reset_bounding_box = True
         self.follow_cam = True  # <-- follow camera enabled by default
@@ -146,52 +139,35 @@ class RegistrationVisualizer(StubVisualizer):
         self.vis.get_render_option().mesh_show_back_face = True
 
         # --- ODOM polyline persistent ---
-        # self.odom_traj_ls = self.o3d.geometry.LineSet()
         self.odom_tubes = []  # list TriangleMesh các ống lẻ
-        # self.vis.add_geometry(self.odom_traj_ls, reset_bounding_box=False)
-                # ------- Video recording -------
-        # Bật/tắt auto-record bằng env (mặc định tắt): KISSLAM_RECORD=1
+        
+        # ------- Video recording -------
         self.record = os.getenv("KISSLAM_RECORD", "0") == "1"
-        # Đường dẫn xuất video (mặc định: slam_vis_<timestamp>.mp4)
         default_name = f"slam_vis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
         self.video_path = os.getenv("KISSLAM_VIDEO", default_name)
-        # FPS đầu ra (mặc định 20)
         self.fps = int(os.getenv("KISSLAM_FPS", "20"))
 
-        self._video_writer = None   # cv2.VideoWriter hoặc imageio writer
-        self._vw_backend = None     # "cv2" hoặc "imageio"
-        self._frame_size = None     # (w, h)
+        self._video_writer = None   
+        self._vw_backend = None     
+        self._frame_size = None     
+        
         # __init__
-        self.odom_mega  = self.o3d.geometry.TriangleMesh()  # mesh gộp
-        self.merge_every = 50              # gộp mỗi 50 đoạn
+        self.odom_mega  = self.o3d.geometry.TriangleMesh()  
+        self.merge_every = 50              
         self._tube_count_since_merge = 0
-        self.z_offset_delta = 9.6  # tổng độ lệch z đang cộng thêm vào đường
-        self.z_step = 0.20         # mỗi lần bấm phím sẽ nhấc/hạ bấy nhiêu (m)
+        self.z_offset_delta = 9.6  
+        self.z_step = 0.20         
+        
         # --- Per-frame recording state ---
-        self.frame_idx = 0  # đếm số frame SLAM đã render
+        self.frame_idx = 0  
         self.merge_every = 10
         self.max_faces   = 200_000
-        self.hard_reset_every = 10000    # mỗi 20k đoạn thì “nén” 1 lần
+        self.hard_reset_every = 10000    
         self._merge_round = 0
         self._segment_total = 0
-        atexit.register(self._finalize_video)  # đóng file an toàn khi thoát
+        atexit.register(self._finalize_video)  
 
-    # def _merge_tubes_if_needed(self):
-    #     if self._tube_count_since_merge >= self.merge_every and len(self.odom_tubes) > 0:
-    #         # Gộp tất cả ống lẻ vào odom_mega
-    #         for t in self.odom_tubes:
-    #             self.odom_mega += t
-    #             self.vis.remove_geometry(t, reset_bounding_box=False)
-    #         self.odom_tubes.clear()
-    #         self._tube_count_since_merge = 0
-    #         # Thêm/ cập nhật odom_mega vào scene
-    #         if not hasattr(self, "_odom_mega_added"):
-    #             self.vis.add_geometry(self.odom_mega, reset_bounding_box=False)
-    #             self._odom_mega_added = True
-    #         else:
-    #             self.vis.update_geometry(self.odom_mega)
     def _compact_history(self):
-        """Nén (decimate) odom_mega để số mặt không phình vô hạn, rồi SWAP mesh mới vào scene."""
         tris = len(self.odom_mega.triangles)
         if tris == 0:
             return
@@ -201,13 +177,11 @@ class RegistrationVisualizer(StubVisualizer):
                 target_number_of_triangles=target
             )
             new_mesh.compute_vertex_normals()
-            # SWAP: gỡ mesh cũ khỏi scene để giải phóng native memory, thêm mesh mới
             if hasattr(self, "_odom_mega_added") and self._odom_mega_added:
                 self.vis.remove_geometry(self.odom_mega, reset_bounding_box=False)
             self.odom_mega = new_mesh
             self.vis.add_geometry(self.odom_mega, reset_bounding_box=False)
             self._odom_mega_added = True
-            # (tuỳ chọn) dọn lưới lần nữa
             try:
                 self.odom_mega.remove_duplicated_vertices()
                 self.odom_mega.remove_duplicated_triangles()
@@ -221,7 +195,6 @@ class RegistrationVisualizer(StubVisualizer):
 
     def _merge_tubes_if_needed(self):
         if self._tube_count_since_merge >= self.merge_every and len(self.odom_tubes) > 0:
-            # 1) gộp các ống lẻ vào 1 mesh tạm
             tmp = self.o3d.geometry.TriangleMesh()
             for t in self.odom_tubes:
                 tmp += t
@@ -229,7 +202,6 @@ class RegistrationVisualizer(StubVisualizer):
             self.odom_tubes.clear()
             self._tube_count_since_merge = 0
 
-            # 2) dọn lưới tạm
             try:
                 tmp.remove_duplicated_vertices()
                 tmp.remove_duplicated_triangles()
@@ -238,10 +210,7 @@ class RegistrationVisualizer(StubVisualizer):
             except Exception:
                 pass
 
-            # 3) cộng vào odom_mega
             self.odom_mega += tmp
-
-            # 4) nếu quá nhiều mặt -> decimate + SWAP object để giải phóng bộ nhớ cũ
             tris = len(self.odom_mega.triangles)
             self._merge_round += 1
             if tris > self.max_faces or (self._merge_round % 5 == 0):
@@ -251,7 +220,6 @@ class RegistrationVisualizer(StubVisualizer):
                         target_number_of_triangles=target
                     )
                     new_mesh.compute_vertex_normals()
-                    # SWAP: tháo mesh cũ khỏi scene, thay bằng mesh mới để GC thu hồi bộ nhớ cũ
                     if hasattr(self, "_odom_mega_added") and self._odom_mega_added:
                         self.vis.remove_geometry(self.odom_mega, reset_bounding_box=False)
                     self.odom_mega = new_mesh
@@ -261,29 +229,14 @@ class RegistrationVisualizer(StubVisualizer):
                     else:
                         self.vis.add_geometry(self.odom_mega, reset_bounding_box=False)
                 except Exception:
-                    # nếu decimate không khả dụng, vẫn cập nhật geometry hiện có
                     pass
 
-            # 5) cập nhật scene nếu chưa add
             if not hasattr(self, "_odom_mega_added"):
                 self.vis.add_geometry(self.odom_mega, reset_bounding_box=False)
                 self._odom_mega_added = True
             else:
                 self.vis.update_geometry(self.odom_mega)
 
-    # def _update_odom_tubes(self, current_pose, z_anchor, radius=0.5):
-    #     pt = current_pose[:3, 3].copy()
-    #     pt[2] = z_anchor
-    #     if len(self.odom_pts) == 0 or np.linalg.norm(pt - self.odom_pts[-1]) > 1e-9:
-    #         self.odom_pts.append(pt)
-    #         if len(self.odom_pts) >= 2:
-    #             p0, p1 = self.odom_pts[-2], self.odom_pts[-1]
-    #             tube = self._cylinder_between(p0, p1, radius=radius, color=self.theme["trajectory"])
-    #             if tube is not None:
-    #                 self.odom_tubes.append(tube)
-    #                 self.vis.add_geometry(tube, reset_bounding_box=False)
-    #                 self._tube_count_since_merge += 1
-    #                 self._merge_tubes_if_needed()
     def _update_odom_tubes(self, current_pose, z_anchor, radius=0.5):
         pt = current_pose[:3, 3].copy(); pt[2] = z_anchor
 
@@ -297,30 +250,11 @@ class RegistrationVisualizer(StubVisualizer):
                     self.vis.add_geometry(tube, reset_bounding_box=False)
                     self._tube_count_since_merge += 1
                     self._merge_tubes_if_needed()
-                # --- đếm tổng số đoạn và nén định kỳ để RES không leo ---
                     self._segment_total += 1
                     if (self._segment_total % self.hard_reset_every) == 0:
                         self._compact_history()
-            # luôn giữ maxlen=2; khi thêm điểm thứ 3, điểm đầu tự bị bỏ
 
-    # def update(self, slam):
-    #     self._update_geometries(slam)
-    #     while self.block_vis:
-    #         self.vis.poll_events()
-    #         self.vis.update_renderer()
-    #         # Ghi frame sau mỗi lần render nếu đang record
-    #         self._capture_and_record()
-    #         if self.play_crun:
-    #             break
-    #     self._capture_and_record()
-    #     self.block_vis = not self.block_vis
     def update(self, slam):
-        """
-        Per-frame recording: mỗi lần pipeline gọi update() là:
-        - Cập nhật geometry theo frame SLAM hiện tại
-        - Render đúng 1 lần
-        - (Nếu record đang bật) chụp màn hình và ghi vào video đúng 1 frame
-        """
         # 1) cập nhật scene theo dữ liệu SLAM mới
         self._update_geometries(slam)
 
@@ -335,7 +269,6 @@ class RegistrationVisualizer(StubVisualizer):
         # 4) tăng bộ đếm frame (hữu ích cho debug/log)
         self.frame_idx += 1
 
-    # Private Interface ---------------------------------------------------------------------------
     def _initialize_visualizer(self):
         w_name = self.__class__.__name__
         self.vis.create_window(window_name=w_name, width=1920, height=1080)
@@ -354,30 +287,6 @@ class RegistrationVisualizer(StubVisualizer):
             "\t    [B] to toggle a black background\n"
             "\t    [F] to toggle follow camera\n"
         )
-    def _update_odom_polyline(self, current_pose, z_anchor):
-        """Append current pose to a persistent LineSet so the odom path is continuous and on top."""
-
-        # Lấy vị trí hiện tại
-        pt = current_pose[:3, 3].copy()
-        pt[2] = z_anchor  # neo Z lên trên đỉnh point cloud để không bị che
-
-        # Nếu là điểm đầu hoặc khác điểm cũ -> thêm
-        if (len(self.odom_pts) == 0) or (np.linalg.norm(pt - self.odom_pts[-1]) > 1e-9):
-            self.odom_pts.append(pt)
-
-            # Cập nhật LineSet: các đoạn (i -> i+1)
-            if len(self.odom_pts) >= 2:
-                lines = [[i, i + 1] for i in range(len(self.odom_pts) - 1)]
-            else:
-                lines = []
-
-            self.odom_traj_ls.points = self.o3d.utility.Vector3dVector(self.odom_pts)
-            self.odom_traj_ls.lines  = self.o3d.utility.Vector2iVector(lines)
-            self.odom_traj_ls.colors = self.o3d.utility.Vector3dVector(
-                [self.theme["trajectory"] for _ in lines]
-            )
-
-            self.vis.update_geometry(self.odom_traj_ls)
 
     def _register_key_callback(self, keys: List, callback: Callable):
         for key in keys:
@@ -390,31 +299,25 @@ class RegistrationVisualizer(StubVisualizer):
         self._register_key_callback(["C"], self._center_viewpoint)
         self._register_key_callback(["B"], self._set_black_background)
         self._register_key_callback(["W"], self._set_white_background)
-        # self._register_key_callback(["F"], self._toggle_follow)  # <-- new
         self._register_key_callback(["F"], self._toggle_follow)
-        self._register_key_callback(["R"], self._toggle_record)  # <-- NEW: bật/tắt ghi hình
-
-        # self._register_key_callback(["R"], self._toggle_record)
-        self._register_key_callback(["X"], self._clear_path)      # reset đường
-        self._register_key_callback(["J"], self._thicker_tube)  # dày hơn
-        self._register_key_callback(["K"], self._thinner_tube)  # mỏng hơn
-        # … các hotkey khác …
-        self._register_key_callback(["["], self._lower_traj)   # hạ đường
-        self._register_key_callback(["]"], self._raise_traj)   # nâng đường
-        self._register_key_callback(["0"], self._reset_traj)   # reset về mặc định
+        self._register_key_callback(["R"], self._toggle_record) 
+        self._register_key_callback(["X"], self._clear_path)      
+        self._register_key_callback(["J"], self._thicker_tube)  
+        self._register_key_callback(["K"], self._thinner_tube)  
+        self._register_key_callback(["["], self._lower_traj)   
+        self._register_key_callback(["]"], self._raise_traj)   
+        self._register_key_callback(["0"], self._reset_traj)   
         self._register_key_callback(["Z"], self._toggle_view_flip_z)
+
     def _toggle_view_flip_z(self, vis):
-        """Bật/tắt lật khung nhìn theo Z bằng cách nhân extrinsic với S."""
         self.flip_view_z = not self.flip_view_z
-        self._apply_view_flip_z()  # nhân S vào extrinsic hiện tại
+        self._apply_view_flip_z() 
         print(f"[ViewFlipZ] {'ON' if self.flip_view_z else 'OFF'}")
 
     def _apply_view_flip_z(self):
-        """Nhân extrinsic camera với S (S^2 = I nên toggle 2 lần sẽ về trạng thái cũ)."""
         ctr = self.vis.get_view_control()
         params = ctr.convert_to_pinhole_camera_parameters()
         params.extrinsic = params.extrinsic @ self._S_flipZ
-        # allow_arbitrary=True để chấp nhận extrinsic bất kỳ
         ctr.convert_from_pinhole_camera_parameters(params, allow_arbitrary=True)
 
     def _clear_path(self, vis):
@@ -428,31 +331,29 @@ class RegistrationVisualizer(StubVisualizer):
             self._odom_mega_added = False
         self.odom_mega = self.o3d.geometry.TriangleMesh()
         print("[Odom] Cleared path.")
+
     def _thicker_tube(self, vis):
         if not hasattr(self, "tube_radius"):
             self.tube_radius = 0.205
         self.tube_radius = min(self.tube_radius * 1.25, 1.0)
         print(f"[Odom] tube radius = {self.tube_radius:.3f}")
+
     def _thinner_tube(self, vis):
         self.tube_radius /= 1.25
         self.tube_radius = max(self.tube_radius, 0.01)
         print(f"[Odom] tube radius = {self.tube_radius:.3f}")
+
     def _nudge_traj_height(self, delta):
-        """Di chuyển toàn bộ đường ống theo trục Z ngay lập tức, và cập nhật trạng thái."""
         if abs(delta) < 1e-9:
             return
-        # 1) dời toàn bộ điểm đã lưu
         for i in range(len(self.odom_pts)):
             self.odom_pts[i][2] += delta
-        # 2) dời toàn bộ mesh ống lẻ
         for t in self.odom_tubes:
             t.translate((0, 0, delta), relative=True)
             self.vis.update_geometry(t)
-        # 3) dời mesh gộp (nếu có)
         if hasattr(self, "_odom_mega_added") and self._odom_mega_added:
             self.odom_mega.translate((0, 0, delta), relative=True)
             self.vis.update_geometry(self.odom_mega)
-        # 4) cập nhật mặt phẳng z hiện tại + tổng offset
         if self.z_plane is not None:
             self.z_plane += delta
         self.z_offset_delta += delta
@@ -465,22 +366,17 @@ class RegistrationVisualizer(StubVisualizer):
         self._nudge_traj_height(-self.z_step)
 
     def _reset_traj(self, vis):
-        # đưa về baseline: nhấc/hạ lại đúng -z_offset_delta
         self._nudge_traj_height(-self.z_offset_delta)
-        # làm mềm lại z-plane ở frame tiếp theo
         self.z_plane = None
         print("[Odom] traj height reset to baseline")
 
-    # ----- Background / window -----
     def _set_black_background(self, vis):
         vis.get_render_option().background_color = [0.0, 0.0, 0.0]
 
     def _set_white_background(self, vis):
         vis.get_render_option().background_color = [1.0, 1.0, 1.0]
 
-
     def _quit(self, vis):
-    # Nếu đang record mà chưa khởi tạo writer, chụp một frame cuối để khởi tạo
         if self.record:
             self.vis.update_renderer()
             last_frame = self._capture_rgb_frame()
@@ -500,7 +396,8 @@ class RegistrationVisualizer(StubVisualizer):
 
         print("Destroying Visualizer...")
         vis.destroy_window()
-        sys.exit(0)   # <-- dùng sys.exit để flush & chạy atexit handlers
+        sys.exit(0)   
+
     def _next_frame(self, vis):
         self.block_vis = not self.block_vis
 
@@ -513,26 +410,25 @@ class RegistrationVisualizer(StubVisualizer):
     def _toggle_follow(self, vis):
         self.follow_cam = not self.follow_cam
         print(f"[FollowCam] {'ON' if self.follow_cam else 'OFF'}")
+
     def _toggle_record(self, vis):
         self.record = not self.record
         print(f"[Record] {'ON' if self.record else 'OFF'}")
         if not self.record:
-            self._finalize_video()  # tắt thì đóng ngay
+            self._finalize_video() 
 
+    # --- ĐÃ SỬA LỖI MÀN HÌNH ĐEN (do_render=True) ---
     def _capture_rgb_frame(self):
         """Chụp frame hiện tại từ Open3D (RGB uint8)."""
-        # Lấy buffer float [0..1], rồi convert sang uint8
-        img = np.asarray(self.vis.capture_screen_float_buffer(do_render=False))
+        img = np.asarray(self.vis.capture_screen_float_buffer(do_render=True))
         if img is None or img.size == 0:
             return None
         img_u8 = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
-        # Open3D trả (H, W, 3). Đảm bảo đúng shape:
-        if img_u8.ndim == 2:  # phòng hờ grayscale (hiếm)
+        if img_u8.ndim == 2:  
             img_u8 = np.repeat(img_u8[..., None], 3, axis=2)
-        return img_u8  # RGB
+        return img_u8 
 
     def _ensure_writer(self, frame_rgb):
-        """Khởi tạo writer nếu chưa có (dựa theo kích thước frame đầu tiên)."""
         if self._video_writer is not None:
             return
 
@@ -540,7 +436,6 @@ class RegistrationVisualizer(StubVisualizer):
         self._frame_size = (w, h)
 
         if _HAS_CV2:
-            # fourcc mp4v gần như tương thích rộng rãi
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
             vw = cv2.VideoWriter(self.video_path, fourcc, self.fps, self._frame_size)
             if vw is None or not vw.isOpened():
@@ -551,8 +446,6 @@ class RegistrationVisualizer(StubVisualizer):
                 print(f"[Record] Writing MP4 via OpenCV → {self.video_path} @ {self.fps} FPS")
                 return
         if _HAS_IMAGEIO:
-            # imageio v2 writer
-            # codec 'libx264' + fps; thêm macro_block_size=None để tránh lỗi kích thước không chia hết 16
             self._video_writer = iio.get_writer(
                 self.video_path,
                 fps=self.fps,
@@ -561,24 +454,20 @@ class RegistrationVisualizer(StubVisualizer):
             )
             self._vw_backend = "imageio"
             print(f"[Record] Writing MP4 via imageio (libx264) → {self.video_path} @ {self.fps} FPS")
-
         else:
-            print("[Record] No backend available (install opencv-python or imageio[ffmpeg]). Recording disabled.")
+            print("[Record] No backend available. Recording disabled.")
             self.record = False
 
     def _write_frame(self, frame_rgb):
-        """Ghi một frame RGB vào video writer hiện tại."""
         if self._video_writer is None:
             return
         if self._vw_backend == "cv2":
-            # cv2 yêu cầu BGR
             frame_bgr = frame_rgb[..., ::-1]
             self._video_writer.write(frame_bgr)
-
         elif self._vw_backend == "imageio":
-            # imageio v2 dùng append_data, nhận RGB
             self._video_writer.append_data(frame_rgb)
 
+    # --- ĐÃ SỬA ĐỂ LƯU ẢNH LÊN WEB FLASK ---
     def _capture_and_record(self):
         """Nếu record đang bật, capture và ghi frame hiện tại."""
         if not self.record:
@@ -590,17 +479,33 @@ class RegistrationVisualizer(StubVisualizer):
             self._ensure_writer(frame)
             if self._video_writer is None:
                 return
+                
+        # 1. Lưu vào Video
         self._write_frame(frame)
+        
+        # 2. Lưu ảnh PNG cho web Flask phát Live
+        try:
+            os.makedirs("renders", exist_ok=True)
+            img_path = f"renders/frame_{self.frame_idx:05d}.png"
+            if _HAS_IMAGEIO:
+                iio.imwrite(img_path, frame)
+            elif _HAS_CV2:
+                cv2.imwrite(img_path, frame[..., ::-1])
+                
+            # Dọn dẹp ảnh cũ để tránh đầy ổ cứng
+            if self.frame_idx > 5:
+                old_path = f"renders/frame_{self.frame_idx-5:05d}.png"
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+        except Exception as e:
+            print(f"Lỗi lưu ảnh PNG: {e}")
 
     def _finalize_video(self):
-        """Đóng writer an toàn."""
         if self._video_writer is None:
             return
         try:
             if self._vw_backend == "cv2":
                 self._video_writer.release()
-            # elif self._vw_backend == "imageio":
-            #     self._video_writer.close()
             elif self._vw_backend == "imageio":
                 self._video_writer.close()
             print(f"[Record] Saved video → {self.video_path}")
@@ -612,7 +517,6 @@ class RegistrationVisualizer(StubVisualizer):
             self._frame_size = None
 
     def _add_line(self, pose0, pose1, color, z_offset=0.0):
-    # Nâng Z để tránh chìm trong point cloud
         p0 = pose0.copy()
         p1 = pose1.copy()
         p0[2] += z_offset
@@ -627,14 +531,12 @@ class RegistrationVisualizer(StubVisualizer):
         return line_set
 
     def _cylinder_between(self, p0, p1, radius=0.1, color=None, resolution=12):
-        # p0, p1: np.array([x,y,z])
         axis = p1 - p0
         L = np.linalg.norm(axis)
         if L < 1e-9:
             return None
         z = axis / L
 
-        # dựng hệ trục: z = trục ống
         up = np.array([0.0, 0.0, 1.0])
         if abs(np.dot(z, up)) > 0.99:
             up = np.array([1.0, 0.0, 0.0])
@@ -647,9 +549,7 @@ class RegistrationVisualizer(StubVisualizer):
         cyl = self.o3d.geometry.TriangleMesh.create_cylinder(radius=radius, height=L, resolution=resolution, split=1)
         cyl.compute_vertex_normals()
         cyl.paint_uniform_color(self.theme["trajectory"] if color is None else color)
-        # Dời cylinder sao cho đáy ở p0 và trục trùng z của local frame
-        # create_cylinder mặc định tâm ở gốc, dài theo +Z và đối xứng quanh tâm (cao từ -L/2..+L/2)
-        # nên cần dịch +L/2 dọc trục z trước khi transform R:
+        
         T = np.eye(4)
         T[:3, 3] = np.array([0, 0, L/2.0])
         cyl.transform(T)
@@ -668,6 +568,7 @@ class RegistrationVisualizer(StubVisualizer):
         m.compute_vertex_normals()
         m.transform(pose)
         return m
+
     def _follow_pose(self, pose, distance=10.0, height=5.0, zoom=0.35):
         ctr = self.vis.get_view_control()
         R = pose[:3, :3]
@@ -680,7 +581,6 @@ class RegistrationVisualizer(StubVisualizer):
         cam_pos = t + back * distance + up * height
         lookat = t
 
-        # --- giữ hiệu ứng lật trong chế độ follow ---
         if self.flip_view_z:
             cam_pos = cam_pos.copy(); lookat = lookat.copy(); up = up.copy()
             cam_pos[2] *= -1.0
@@ -699,15 +599,12 @@ class RegistrationVisualizer(StubVisualizer):
         ctr.set_up(up_n.tolist())
         ctr.set_zoom(zoom)
         
-    # ----- Scene update -----
     def _update_geometries(self, slam):
-    # Local map points in global
         current_node = slam.local_map_graph.last_local_map
         local_map_in_global = transform_points(
             slam.voxel_grid.point_cloud(), current_node.keypose
         )
 
-        # [NEW] Lật Z cho toàn bộ point cloud
         if FLIP_Z:
             local_map_in_global = _flip_z_points(local_map_in_global)
 
@@ -715,15 +612,11 @@ class RegistrationVisualizer(StubVisualizer):
         self.local_map.paint_uniform_color(self.theme["localmap"])
         self.vis.update_geometry(self.local_map)
 
-        # ---- Tính z_plane (neo quỹ đạo) trên cloud đã lật ----
         if local_map_in_global.shape[0] > 0:
-            # segment_plane chạy trên self.local_map (đã là cloud đã lật)
             plane_model, inliers = self.local_map.segment_plane(
                 distance_threshold=0.05, ransac_n=3, num_iterations=500
             )
             a, b, c, d = plane_model
-
-            # [CHANGED] dùng vị trí pose đã lật để tính z_ground
             t_disp = _flip_z_pose(current_node.endpose)[:3, 3] if FLIP_Z else current_node.endpose[:3, 3]
             if abs(c) > 1e-6:
                 z_ground = (-a * t_disp[0] - b * t_disp[1] - d) / c
@@ -731,7 +624,6 @@ class RegistrationVisualizer(StubVisualizer):
             else:
                 target = float(t_disp[2]) + TRAJ_Z_OFFSET + self.z_offset_delta
         else:
-            # [CHANGED] fallback dùng pose đã lật
             t_disp = _flip_z_pose(current_node.endpose)[:3, 3] if FLIP_Z else current_node.endpose[:3, 3]
             target = float(t_disp[2]) + TRAJ_Z_OFFSET + self.z_offset_delta
 
@@ -739,41 +631,12 @@ class RegistrationVisualizer(StubVisualizer):
         self.z_plane = target if self.z_plane is None else (1 - alpha) * self.z_plane + alpha * target
         z_anchor = self.z_plane
 
-        # 3) Lấy pose hiện tại (đã lật phần tịnh tiến Z)
         current_pose = _flip_z_pose(current_node.endpose) if FLIP_Z else current_node.endpose
-
-        # 4) Marker ở pose hiện tại
-        # odom_frame = self._add_frame(current_pose, SPHERE_SIZE_ODOMETRY, self.theme["odom"])
-        # self.odom_frames.append(odom_frame)
-        # self.vis.add_geometry(odom_frame, reset_bounding_box=False)
-        # 4) Marker duy nhất tại pose hiện tại (di chuyển thay vì add mới)
-        # if self.current_marker is None:
-        #     # tạo lần đầu
-        #     self.current_marker = self.o3d.geometry.TriangleMesh.create_sphere(
-        #         radius=SPHERE_SIZE_ODOMETRY, resolution=12
-        #     )
-        #     self.current_marker.paint_uniform_color(self.theme["odom"])
-        #     self.current_marker.compute_vertex_normals()
-        #     self.current_marker_pose = np.eye(4)
-        #     self.vis.add_geometry(self.current_marker, reset_bounding_box=False)
-
-        # # di chuyển marker từ pose cũ -> pose mới dùng biến đổi tương đối
-        # T_new = current_pose
-        # T_prev = self.current_marker_pose
-        # # T_delta = inv(T_prev) @ T_new
-        # T_delta = np.linalg.inv(T_prev) @ T_new
-        # self.current_marker.transform(T_delta)
-        # self.current_marker_pose = T_new
-        # self.vis.update_geometry(self.current_marker)
-
-        # 5) Quỹ đạo (ống)
         self._update_odom_tubes(current_pose, z_anchor, radius=self.tube_radius)
 
-        # 6) Follow camera
         if self.follow_cam:
             self._follow_pose(current_pose)
 
-        # 7) Keyframes: lật phần tịnh tiến z trước khi vẽ spheres/edges
         key_poses = slam.get_keyposes()
         if key_poses != self.key_poses:
             for frame in self.key_frames:
