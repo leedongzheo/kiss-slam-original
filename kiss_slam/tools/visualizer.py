@@ -87,7 +87,8 @@ class RegistrationVisualizer(StubVisualizer):
         self.block_vis = True
         self.play_crun = True
         self.reset_bounding_box = True
-        self.follow_cam = True
+        # self.follow_cam = True
+        self.follow_cam = False
 
         # --- DUAL MAP SYSTEM (LOCAL & GLOBAL) ---
         self.local_map = self.o3d.geometry.PointCloud()
