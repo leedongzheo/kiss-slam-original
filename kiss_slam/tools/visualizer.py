@@ -807,7 +807,7 @@ class RegistrationVisualizer(StubVisualizer):
 
     def _initialize_visualizer(self):
         w_name = self.__class__.__name__
-        self.vis.create_window(window_name=w_name, width=1920, height=1080)
+        self.vis.create_window(window_name=w_name, width=1920, height=1080, visible=True)
         
         # Bật cả Local và Global Map lên màn hình
         self.vis.add_geometry(self.local_map)
