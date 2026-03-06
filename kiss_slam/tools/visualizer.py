@@ -560,3 +560,6 @@ class RegistrationVisualizer(StubVisualizer):
         if self.reset_bounding_box:
             self.vis.reset_view_point(True)
             self.reset_bounding_box = False
+        # Cập nhật tầm nhìn liên tục mỗi frame thay vì đợi 30 frames
+        elif not self.follow_cam:
+            self.vis.reset_view_point(True)
