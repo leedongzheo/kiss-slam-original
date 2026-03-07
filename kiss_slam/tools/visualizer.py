@@ -564,6 +564,7 @@
 #         # Cập nhật tầm nhìn liên tục mỗi frame thay vì đợi 30 frames
 #         elif not self.follow_cam:
 #             self.vis.reset_view_point(True)
+# --------------------------------------------------------------------------
 import importlib
 import os
 from abc import ABC
